@@ -31,6 +31,7 @@ class EngineArgs:
     revision: Optional[str] = None
     tokenizer_revision: Optional[str] = None
     quantization: Optional[str] = None
+    extra_model_config: Optional[dict] = None
 
     def __post_init__(self):
         if self.tokenizer is None:
@@ -184,7 +185,8 @@ class EngineArgs:
                                    self.download_dir, self.load_format,
                                    self.dtype, self.seed, self.revision,
                                    self.tokenizer_revision, self.max_model_len,
-                                   self.quantization)
+                                   self.quantization, extra_model_config=self.extra_model_config)
+
         cache_config = CacheConfig(
             self.block_size, self.gpu_memory_utilization, self.swap_space,
             getattr(model_config.hf_config, 'sliding_window', None))

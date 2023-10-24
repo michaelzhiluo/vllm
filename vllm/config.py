@@ -11,6 +11,10 @@ logger = init_logger(__name__)
 
 _GB = 1 << 30
 
+def augment_model_config(hf_config, extra_params_dict):
+    for key, value in extra_params_dict.items():
+        setattr(hf_config, key, value)  
+
 
 class ModelConfig:
     """Configuration for the model.
@@ -64,6 +68,7 @@ class ModelConfig:
         tokenizer_revision: Optional[str] = None,
         max_model_len: Optional[int] = None,
         quantization: Optional[str] = None,
+        extra_model_config: Optional[dict] = {},
     ) -> None:
         self.model = model
         self.tokenizer = tokenizer
@@ -75,8 +80,10 @@ class ModelConfig:
         self.revision = revision
         self.tokenizer_revision = tokenizer_revision
         self.quantization = quantization
+        self.extra_model_config = extra_model_config
 
         self.hf_config = get_config(model, trust_remote_code, revision)
+        augment_model_config(self.hf_config, {'lora_config': extra_model_config})
         self.dtype = _get_and_verify_dtype(self.hf_config, dtype)
         self.max_model_len = _get_and_verify_max_len(self.hf_config,
                                                      max_model_len)

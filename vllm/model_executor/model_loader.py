@@ -8,6 +8,7 @@ from transformers import PretrainedConfig
 
 from vllm.config import ModelConfig
 from vllm.model_executor.models import *  # pylint: disable=wildcard-import
+from vllm.model_executor.models.lora import apply_lora_wrapper
 from vllm.model_executor.weight_utils import (get_quant_config,
                                               initialize_dummy_weights)
 
@@ -91,6 +92,10 @@ def get_model(model_config: ModelConfig) -> nn.Module:
             model = model_class(model_config.hf_config, quant_config)
         else:
             model = model_class(model_config.hf_config)
+        
+        if model_config.extra_model_config:
+            apply_lora_wrapper(model, model_config.extra_model_config)
+
         if model_config.load_format == "dummy":
             model = model.cuda()
             # NOTE(woosuk): For accurate performance evaluation, we assign
