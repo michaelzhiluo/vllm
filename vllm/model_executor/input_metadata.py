@@ -30,6 +30,7 @@ class InputMetadata:
         max_context_len: int,
         block_tables: torch.Tensor,
         sliding_window: Optional[int] = None,
+        lora_ids: Optional[torch.Tensor] = None,
     ) -> None:
         self.seq_groups = seq_groups
         self.seq_data = seq_data
@@ -38,6 +39,7 @@ class InputMetadata:
         self.context_lens = context_lens
         self.max_context_len = max_context_len
         self.block_tables = block_tables
+        self.lora_ids = lora_ids
 
         self.max_prompt_len = max(prompt_lens) if prompt_lens else 0
         self.to_cache = None
@@ -81,4 +83,5 @@ class InputMetadata:
                 f'max_context_len={self.max_context_len}, '
                 f'max_num_blocks_per_seq={self.max_num_blocks_per_seq}, '
                 f'block_tables={self.block_tables}, '
-                f'slot_mapping={self.slot_mapping})')
+                f'slot_mapping={self.slot_mapping}, '
+                f'lora_ids={self.lora_ids})')

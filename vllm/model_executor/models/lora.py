@@ -26,6 +26,15 @@ def apply_lora_wrapper(model, lora_config):
                 parent_module = getattr(parent_module, sub_name)
             setattr(parent_module, path[-1], wrapper)
 
+def extract_lora_weights(model):
+    lora_weights = {}
+    named_module_tuple = list(model.named_modules())
+    for name, module in named_module_tuple:
+        module_name = type(module).__name__
+        if module_name in SUPPORTED_LORA_LAYERS:
+            lora_weights[name] = (module.lora_A, module.lora_B)
+    return lora_weights
+
 
 class BatchedLoraWrapper(nn.Module):
     def __init__(self, layer, lora_num_models=1, lora_rank=4, lora_alpha=1):
@@ -46,6 +55,7 @@ class BatchedLoraWrapper(nn.Module):
         self.lora_alpha, self.lora_rank = lora_alpha, lora_rank
         self.lora_scaling = lora_alpha / lora_rank
         self.lora_enabled = True
+        self.lora_ids = None
 
     def _get_fan_in_out(self, layer):
         """
@@ -67,23 +77,28 @@ class BatchedLoraWrapper(nn.Module):
 
     
     def forward(self, *args, **kwargs):
-        # Assume args[0] is the input, X.
-        X = args[0]
-
         # Layer is expected to be a FC layer.
         outputs = self.ffn(*args, **kwargs)
-        if not self.lora_enabled:
+        if not self.lora_enabled or self.num_lora_models == 0:
             return outputs
+
+        # Assume args[0] is the input, X (batch_size, seq_len, hidden_dim)
+        X = args[0]
+        self.lora_ids = torch.zeros(X.shape[0], dtype=torch.int64).cuda().unsqueeze(1).unsqueeze(2)
 
         if isinstance(outputs, tuple) or isinstance(outputs, list):
             output = outputs[0]
             extra_outputs = outputs[1:]
         else:
             output = outputs
+            extra_outputs = None
         
-        # NWR - Num Model x Width x Rank, BW - Batch x Width
-        inter_tensor = torch.einsum('NWR,BW->NBR', self.lora_A, X)
-        lora_output = output + torch.einsum('NBR,NWR->BW', inter_tensor, self.lora_B) * self.lora_scaling
+        # NWR - Num Model x Width x Rank, BSW - Batch x Seq_len x Width
+        # print(self.lora_A.shape, X.shape)
+        gathered_A = torch.gather(self.lora_A, dim=0, index=self.lora_ids)
+        gathered_B = torch.gather(self.lora_B, dim=0, index=self.lora_ids)
+        inter_tensor = torch.einsum('BWR,BSW->BSR', gathered_A,  X)
+        lora_output = output + torch.einsum('BSR,BWR->BSW', inter_tensor, gathered_B) * self.lora_scaling
         return lora_output, extra_outputs
 
     def disable_lora(self):

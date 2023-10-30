@@ -108,6 +108,7 @@ class LLM:
         prompts: Optional[Union[str, List[str]]] = None,
         sampling_params: Optional[SamplingParams] = None,
         prompt_token_ids: Optional[List[List[int]]] = None,
+        lora_ids: Optional[List[int]] = None,
         use_tqdm: bool = True,
     ) -> List[RequestOutput]:
         """Generates the completions for the input prompts.
@@ -122,6 +123,8 @@ class LLM:
                 None, we use the default sampling parameters.
             prompt_token_ids: A list of token IDs for the prompts. If None, we
                 use the tokenizer to convert the prompts to token IDs.
+            lora_ids: A list of LORA IDs for the prompts. If None, we default to
+                0.
             use_tqdm: Whether to use tqdm to display the progress bar.
 
         Returns:
@@ -147,13 +150,27 @@ class LLM:
             num_requests = len(prompts)
         else:
             num_requests = len(prompt_token_ids)
+        
+        # Check LORA IDs
+        if lora_ids is None:
+            lora_ids = [0] * num_requests
+        else:
+            if len(lora_ids) != num_requests:
+                raise ValueError("The lengths of prompts and lora_ids "
+                                 "must be the same.")
+
         for i in range(num_requests):
             prompt = prompts[i] if prompts is not None else None
             if prompt_token_ids is None:
                 token_ids = None
             else:
                 token_ids = prompt_token_ids[i]
-            self._add_request(prompt, sampling_params, token_ids)
+            
+            if lora_ids is None:
+                lora_id = 0
+            else:
+                lora_id = lora_ids[i]
+            self._add_request(prompt, sampling_params, token_ids,lora_id=lora_id)
         return self._run_engine(use_tqdm)
 
     def _add_request(
@@ -161,10 +178,11 @@ class LLM:
         prompt: Optional[str],
         sampling_params: SamplingParams,
         prompt_token_ids: Optional[List[int]],
+        lora_id: Optional[int],
     ) -> None:
         request_id = str(next(self.request_counter))
         self.llm_engine.add_request(request_id, prompt, sampling_params,
-                                    prompt_token_ids)
+                                    prompt_token_ids, lora_id=lora_id)
 
     def _run_engine(self, use_tqdm: bool) -> List[RequestOutput]:
         # Initialize tqdm.

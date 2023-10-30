@@ -224,6 +224,17 @@ class GPT2LMHeadModel(nn.Module):
         input_metadata: InputMetadata,
         cache_events: Optional[List[torch.cuda.Event]],
     ) -> SamplerOutput:
+
+        
+        def apply_lora_wrapper(model):
+            named_module_tuple = list(model.named_modules())
+            for name, module in named_module_tuple:
+                module_name = type(module).__name__
+                if module_name == 'BatchedLoraWrapper':
+                    module.lora_ids = input_metadata.lora_ids
+        apply_lora_wrapper(self)
+
+
         hidden_states = self.transformer(input_ids, positions, kv_caches,
                                          input_metadata, cache_events)
         next_tokens = self.sampler(self.lm_head_weight, hidden_states,

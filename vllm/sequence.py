@@ -113,6 +113,7 @@ class Sequence:
         prompt: str,
         prompt_token_ids: List[int],
         block_size: int,
+        lora_id: Optional[int] = 0,
     ) -> None:
         self.seq_id = seq_id
         self.prompt = prompt
@@ -132,6 +133,7 @@ class Sequence:
         self.read_offset = 0
         # Input + output tokens
         self.tokens: Optional[List[str]] = None
+        self.lora_id = lora_id
 
     def _append_logical_block(self) -> None:
         block = LogicalTokenBlock(
@@ -216,6 +218,7 @@ class Sequence:
 
     def __repr__(self) -> str:
         return (f"Sequence(seq_id={self.seq_id}, "
+                f"lora_id={self.lora_id}, "
                 f"status={self.status.name}, "
                 f"num_blocks={len(self.logical_token_blocks)})")
 
@@ -236,12 +239,14 @@ class SequenceGroup:
         seqs: List[Sequence],
         sampling_params: SamplingParams,
         arrival_time: float,
+        lora_id: int = 0,
     ) -> None:
         self.request_id = request_id
         self.seqs_dict = {seq.seq_id: seq for seq in seqs}
         self.sampling_params = sampling_params
         self.arrival_time = arrival_time
         self.prompt_logprobs: Optional[PromptLogprobs] = None
+        self.lora_id = lora_id
 
     @property
     def prompt(self) -> str:
@@ -320,6 +325,7 @@ class SequenceGroup:
 
     def __repr__(self) -> str:
         return (f"SequenceGroup(request_id={self.request_id}, "
+                f"lora_id={self.lora_id}, "
                 f"sampling_params={self.sampling_params}, "
                 f"num_seqs={len(self.seqs_dict)})")
 
@@ -344,12 +350,14 @@ class SequenceGroupMetadata:
         seq_data: Dict[int, SequenceData],
         sampling_params: SamplingParams,
         block_tables: Dict[int, List[int]],
+        lora_id: Optional[int] = 0,
     ) -> None:
         self.request_id = request_id
         self.is_prompt = is_prompt
         self.seq_data = seq_data
         self.sampling_params = sampling_params
         self.block_tables = block_tables
+        self.lora_id = lora_id
 
 
 class SequenceOutputs:

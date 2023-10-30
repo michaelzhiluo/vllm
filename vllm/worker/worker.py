@@ -46,6 +46,7 @@ class Worker:
         self.cache_engine = None
         self.cache_events = None
         self.gpu_cache = None
+        self.lora_cpu_dict = {}
 
     def init_model(self):
         # This env var set by Ray causes exceptions with graph building.
@@ -108,19 +109,25 @@ class Worker:
 
         # Execute the model.
         num_layers = self.model_config.get_num_layers(self.parallel_config)
-        self.model(
-            input_ids=input_tokens,
-            positions=input_positions,
-            kv_caches=[(None, None)] * num_layers,
-            input_metadata=input_metadata,
-            cache_events=None,
-        )
+        with torch.no_grad():
+            self.model(
+                input_ids=input_tokens,
+                positions=input_positions,
+                kv_caches=[(None, None)] * num_layers,
+                input_metadata=input_metadata,
+                cache_events=None,
+            )
 
         # Calculate the number of blocks that can be allocated with the
         # profiled peak memory.
         torch.cuda.synchronize()
         peak_memory = torch.cuda.max_memory_allocated()
         total_gpu_memory = get_gpu_memory()
+        # cur_memory = torch.cuda.memory_allocated()
+        # print(cur_memory/(1024**2), peak_memory/(1024**2), torch.cuda.max_memory_reserved(device=0)/(1024**2))
+        # print("Max possible lora")
+        # print((total_gpu_memory - peak_memory)/(1.125 * 1024**2))
+        # import pdb; pdb.set_trace()
         cache_block_size = CacheEngine.get_cache_block_size(
             block_size, self.model_config, self.parallel_config)
         num_gpu_blocks = int(
@@ -241,6 +248,10 @@ class Worker:
                                              self.block_size)
                     block_table = block_table[-sliding_window_blocks:]
                 generation_block_tables.append(block_table)
+        
+        lora_ids = []
+        for seq_group_metadata in seq_group_metadata_list:
+            lora_ids.append(seq_group_metadata.lora_id)
 
         max_seq_len = max(prompt_lens) if prompt_lens else 1
         padded_input_tokens = [
@@ -275,6 +286,9 @@ class Worker:
         block_tables_tensor = torch.tensor(padded_block_tables,
                                            dtype=torch.int,
                                            device="cuda")
+        lora_ids_tensor = torch.tensor(lora_ids,
+                                        dtype=torch.int,
+                                        device="cuda")
 
         seq_data: Dict[int, SequenceData] = {}
         for seq_group_metadata in seq_group_metadata_list:
@@ -289,6 +303,7 @@ class Worker:
             max_context_len=max_context_len,
             block_tables=block_tables_tensor,
             sliding_window=self.sliding_window,
+            lora_ids=lora_ids_tensor,
         )
         return tokens_tensor, positions_tensor, input_metadata
 
@@ -327,6 +342,19 @@ class Worker:
         # Prepare input tensors.
         input_tokens, input_positions, input_metadata = self._prepare_inputs(
             seq_group_metadata_list)
+        # For cache miss ablations
+        def swap_cpu_lora(model):
+            named_module_tuple = list(model.named_modules())
+            for name, module in named_module_tuple:
+                module_name = type(module).__name__
+                if module_name == 'BatchedLoraWrapper':
+                    if name not in self.lora_cpu_dict:
+                        self.lora_cpu_dict[name] = {}
+                        self.lora_cpu_dict[name]['lora_A'] = module.lora_A.cpu()
+                        self.lora_cpu_dict[name]['lora_B'] = module.lora_A.cpu()
+                    module.lora_A.data = self.lora_cpu_dict[name]['lora_A'].cuda()
+                    module.lora_B.data = self.lora_cpu_dict[name]['lora_B'].cuda()
+        swap_cpu_lora(self.model)
 
         # Execute the model.
         output = self.model(

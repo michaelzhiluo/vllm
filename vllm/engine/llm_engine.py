@@ -241,6 +241,7 @@ class LLMEngine:
         sampling_params: SamplingParams,
         prompt_token_ids: Optional[List[int]] = None,
         arrival_time: Optional[float] = None,
+        lora_id: Optional[int] = 0,
     ) -> None:
         """Add a request to the engine's request pool.
 
@@ -267,12 +268,11 @@ class LLMEngine:
         # Create the sequences.
         block_size = self.cache_config.block_size
         seq_id = next(self.seq_counter)
-        seq = Sequence(seq_id, prompt, prompt_token_ids, block_size)
+        seq = Sequence(seq_id, prompt, prompt_token_ids, block_size, lora_id=lora_id)
 
         # Create the sequence group.
         seq_group = SequenceGroup(request_id, [seq], sampling_params,
-                                  arrival_time)
-
+                                  arrival_time, lora_id=lora_id)
         # Add the sequence group to the scheduler.
         self.scheduler.add_seq_group(seq_group)
 

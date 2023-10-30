@@ -154,6 +154,10 @@ class CacheEngine:
         total = num_layers * (key_cache_block + value_cache_block)
         dtype_size = _get_dtype_size(model_config.dtype)
         return dtype_size * total
+    
+    @staticmethod
+    def get_lora_size():
+        return
 
 
 def _get_dtype_size(dtype: torch.dtype) -> int:

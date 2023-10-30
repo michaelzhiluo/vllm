@@ -284,6 +284,7 @@ class Scheduler:
 
             seq_group_metadata = SequenceGroupMetadata(
                 request_id=seq_group.request_id,
+                lora_id=seq_group.lora_id,
                 is_prompt=scheduler_outputs.prompt_run,
                 seq_data=seq_data,
                 sampling_params=seq_group.sampling_params,
